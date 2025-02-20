@@ -353,6 +353,41 @@ static mp_obj_t socket_recvfrom(mp_obj_t self_in, mp_obj_t len_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(socket_recvfrom_obj, socket_recvfrom);
 
+// method socket.recvfrom_into(buf, [bufsize])
+static mp_obj_t socket_recvfrom_into(size_t n_args, const mp_obj_t *args) {
+    mod_network_socket_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if (self->nic == MP_OBJ_NULL) {
+        // not connected
+        mp_raise_OSError(MP_ENOTCONN);
+    }
+
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(args[1], &bufinfo, MP_BUFFER_WRITE);
+
+    // If 2nd arg is provided, that's max len to read,
+    // instead of full buffer.
+    mp_uint_t len = bufinfo.len;
+    if (n_args > 2) {
+        len = mp_obj_get_int(args[2]);
+        if (len > bufinfo.len) {
+            len = bufinfo.len;
+        }
+    }
+
+    byte ip[4];
+    mp_uint_t port;
+    int _errno;
+    mp_int_t ret = self->nic_protocol->recvfrom(self, (byte *)bufinfo.buf, len, ip, &port, &_errno);
+    if (ret == -1) {
+        mp_raise_OSError(_errno);
+    }
+    mp_obj_t tuple[2];
+    tuple[0] = MP_OBJ_NEW_SMALL_INT(ret);
+    tuple[1] = netutils_format_inet_addr(ip, port, NETUTILS_BIG);
+    return mp_obj_new_tuple(2, tuple);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(socket_recvfrom_into_obj, 2, 3, socket_recvfrom_into);
+
 // method socket.setsockopt(level, optname, value)
 static mp_obj_t socket_setsockopt(size_t n_args, const mp_obj_t *args) {
     mod_network_socket_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -457,6 +492,7 @@ static const mp_rom_map_elem_t socket_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_recv), MP_ROM_PTR(&socket_recv_obj) },
     { MP_ROM_QSTR(MP_QSTR_sendto), MP_ROM_PTR(&socket_sendto_obj) },
     { MP_ROM_QSTR(MP_QSTR_recvfrom), MP_ROM_PTR(&socket_recvfrom_obj) },
+    { MP_ROM_QSTR(MP_QSTR_recvfrom_into), MP_ROM_PTR(&socket_recvfrom_into_obj) },
     { MP_ROM_QSTR(MP_QSTR_setsockopt), MP_ROM_PTR(&socket_setsockopt_obj) },
     { MP_ROM_QSTR(MP_QSTR_makefile), MP_ROM_PTR(&socket_makefile_obj) },
     { MP_ROM_QSTR(MP_QSTR_settimeout), MP_ROM_PTR(&socket_settimeout_obj) },
